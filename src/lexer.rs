@@ -1,5 +1,6 @@
 use crate::traits::LexicalAnalyzer;
-
+// Stores the source characters and the current position used by the
+// character-by-character lexical analyzer.
 pub struct Lexer {
     source: Vec<char>,
     position: usize,
@@ -8,14 +9,16 @@ pub struct Lexer {
 }
 
 impl Lexer {
+    // Returns the lexeme currently being built by the lexer.
     pub fn get_lexeme(&self) -> String {
         self.lexeme.clone()
     }
-
+    // Clears the previous lexeme before the lexer begins building a new token.
     pub fn clear_lexeme(&mut self) {
         self.lexeme.clear();
     }
-
+    // Reads the source character by character and returns the next LOLCODE token.
+    // It handles keywords, annotations, normal text, and reports invalid tokens.
     pub fn next_token(&mut self) -> String {
         self.clear_lexeme();
     
@@ -28,7 +31,7 @@ impl Lexer {
         if self.position >= self.source.len() {
             return String::new();
         }
-
+        // After #MAEK or #GIMMEH, the following word is treated as a grammar keyword.
         if self.expecting_keyword {
             while self.position < self.source.len() {
                 let c = self.source[self.position];
@@ -47,7 +50,7 @@ impl Lexer {
         
         
         }
-    
+        // Tokens beginning with # are LOLCODE annotations and must be validated.
         if self.source[self.position] == '#' {
             while self.position < self.source.len() {
                 let c = self.source[self.position];
@@ -86,7 +89,7 @@ impl Lexer {
     
         self.get_lexeme().trim().to_string()
     }
-
+    // Creates a new lexer from the source text and starts at the first character.
     pub fn new(source: &str) -> Lexer {
         Lexer {
             source: source.chars().collect(),
@@ -96,8 +99,9 @@ impl Lexer {
         }
     }
 }
-
+// Implements the required character-by-character lexical analyzer operations.
 impl LexicalAnalyzer for Lexer {
+    // Returns the next character from the source and moves the position forward.
     fn get_char(&mut self) -> char {
         if self.position >= self.source.len() {
             println!("End of input.");
@@ -108,11 +112,12 @@ impl LexicalAnalyzer for Lexer {
         self.position += 1;
         c
     }
-
+    // Adds one character to the lexeme currently being constructed.
     fn add_char(&mut self, c: char) {
         self.lexeme.push(c);
     }
-
+    // Checks whether a LOLCODE annotation or keyword is part of the valid token set.
+    // The comparison is case-insensitive.
     fn lookup(&self, s: &str) -> bool {
         match s.to_uppercase().as_str() {
             "#HAI"

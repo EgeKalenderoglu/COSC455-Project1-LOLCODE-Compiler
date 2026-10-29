@@ -2,6 +2,8 @@ use crate::lexer::Lexer;
 use crate::traits::{Compiler, SyntaxAnalyzer};
 use std::collections::HashMap;
 use std::fs;
+// Stores the lexer, current token, variable scopes, and generated HTML
+// while the LOLCODE source file is being compiled.
 pub struct LolCompiler {
     lexer: Lexer,
     current_token: String,
@@ -10,14 +12,16 @@ pub struct LolCompiler {
 }
 
 impl LolCompiler {
-
+    // Writes the completed HTML output to a file.
+    // If the file cannot be written, the compiler prints an error and stops.
     pub fn save_html(&self, filename: &str) {
         if let Err(error) = fs::write(filename, &self.html_output) {
             eprintln!("Error writing HTML file: {}", error);
             std::process::exit(1);
         }
     }
-
+    // Adds a space when the next token is normal text so generated HTML
+    // and variable values do not run directly into the next word.
     fn add_space_before_next_text(&mut self) {
         if !self.current_token.is_empty()
             && !self.current_token.starts_with('#')
@@ -29,7 +33,8 @@ impl LolCompiler {
             }
         }
     }
-
+    // Creates a new compiler with an empty lexer, no active scopes,
+    // no current token, and no generated HTML.
     pub fn new() -> LolCompiler {
         LolCompiler {
             lexer: Lexer::new(""),
@@ -39,12 +44,14 @@ impl LolCompiler {
         }
     }
 
-
+    // Gets the next token from the lexer and makes it the current token
+    // used by the parser.
     fn advance(&mut self) {
         let next = self.next_token();
         self.set_current_token(next);
     }
-
+    // Searches for a variable starting in the innermost scope and then
+    // moves outward. This allows local variables to shadow outer variables.
     fn resolve_variable(&self, name: &str) -> Option<String> {
         for scope in self.scopes.iter().rev() {
             if let Some(value) = scope.get(name) {
@@ -54,7 +61,8 @@ impl LolCompiler {
     
         None
     }
-
+    // Checks that the current token matches what the grammar expects.
+    // If it matches, parsing continues; otherwise a syntax error is reported.
     fn match_token(&mut self, expected: &str) {
         if self.current_token.eq_ignore_ascii_case(expected) {
             self.advance();
@@ -68,8 +76,11 @@ impl LolCompiler {
         }
     }
 }
-
+// Implements the required Compiler trait and connects the lexer
+// with the recursive-descent parser.
 impl Compiler for LolCompiler {
+    // Resets the compiler for a new source file, creates the global
+    // variable scope, and loads the first token.
     fn compile(&mut self, source: &str) {
         self.lexer = Lexer::new(source);
         self.scopes.clear();
@@ -77,25 +88,28 @@ impl Compiler for LolCompiler {
         self.html_output.clear();
         self.current_token = self.next_token();
     }
-
+    // Requests and returns the next token from the lexical analyzer.
     fn next_token(&mut self) -> String {
         self.lexer.next_token()
     }
-
+    // Starts syntax analysis using the top-level LOLCODE grammar rule.
     fn parse(&mut self) {
         self.parse_lolcode();
     }
-
+    // Returns a copy of the token currently being examined by the parser.
     fn current_token(&self) -> String {
         self.current_token.clone()
     }
-
+    // Changes the parser's current token.
     fn set_current_token(&mut self, tok: String) {
         self.current_token = tok;
     }
 }
-
+// Implements the recursive-descent parser. Each parse function
+// corresponds to a part of the LOLCODE grammar.
 impl SyntaxAnalyzer for LolCompiler {
+    // Parses the complete LOLCODE program from #HAI through #KBYE
+    // and creates the outer HTML structure.
     fn parse_lolcode(&mut self) {
         self.match_token("#HAI");
         self.html_output.push_str("<html>\n");
@@ -141,7 +155,7 @@ impl SyntaxAnalyzer for LolCompiler {
             std::process::exit(1);
         }
     }
-
+    // Parses the optional HEAD section and its title.
     fn parse_head(&mut self) {
         self.match_token("HEAD");
     
@@ -153,7 +167,7 @@ impl SyntaxAnalyzer for LolCompiler {
     
         self.html_output.push_str("</head>");
     }
-
+    // Parses a TITLE annotation and converts the title text to an HTML title.
     fn parse_title(&mut self) {
         self.match_token("#GIMMEH");
         self.match_token("TITLE");
@@ -178,7 +192,7 @@ impl SyntaxAnalyzer for LolCompiler {
     
         self.match_token("#OIC");
     }
-
+    // Parses an OBTW/TLDR comment and converts it to an HTML comment.
     fn parse_comment(&mut self) {
         self.match_token("#OBTW");
     
@@ -202,7 +216,8 @@ impl SyntaxAnalyzer for LolCompiler {
     
         self.match_token("#TLDR");
     }
-
+    // Parses the main body by checking the current token and deciding
+    // which type of LOLCODE construct should be parsed next.
     fn parse_body(&mut self) {
         if self.current_token.is_empty()
             || self.current_token.eq_ignore_ascii_case("#KBYE")
@@ -270,7 +285,8 @@ impl SyntaxAnalyzer for LolCompiler {
             std::process::exit(1);
         }
     }
-
+    // Parses a paragraph and creates a new local variable scope.
+    // The scope is removed when the paragraph ends.
     fn parse_paragraph(&mut self) {
         self.match_token("PARAGRAF");
         self.html_output.push_str("<p>");
@@ -286,7 +302,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str("</p>");
         self.scopes.pop();
     }
-
+    // Continues parsing paragraph contents until the closing #MKAY is reached.
     fn parse_inner_paragraph(&mut self) {
         if self.current_token.is_empty()
             || self.current_token.eq_ignore_ascii_case("#MKAY")
@@ -297,7 +313,8 @@ impl SyntaxAnalyzer for LolCompiler {
         self.parse_inner_text();
         self.parse_inner_paragraph();
     }
-
+    // Determines what type of content appears inside a paragraph,
+    // such as text, variables, bold text, links, lists, or comments.
     fn parse_inner_text(&mut self) {
         if self.current_token.eq_ignore_ascii_case("#MAEK") {
             self.match_token("#MAEK");
@@ -350,7 +367,8 @@ impl SyntaxAnalyzer for LolCompiler {
             std::process::exit(1);
         }
     }
-
+    // Parses a variable definition and stores its name and value
+    // in the current active scope.
     fn parse_variable_define(&mut self) {
         self.match_token("#IHAZ");
     
@@ -389,7 +407,8 @@ impl SyntaxAnalyzer for LolCompiler {
             current_scope.insert(variable_name, variable_value);
         }
     }
-
+    // Parses a variable use and searches the active scopes for its value.
+    // Using an undefined variable causes a static semantic error.  
     fn parse_variable_use(&mut self) {
         self.match_token("VAR");
     
@@ -423,7 +442,8 @@ impl SyntaxAnalyzer for LolCompiler {
             }
         }
     }
-
+    // Parses bold text or a variable inside BOLD and generates
+    // the corresponding HTML <b> element.
     fn parse_bold(&mut self) {
         self.match_token("BOLD");
     
@@ -460,7 +480,7 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str("</b>");
         self.add_space_before_next_text();
     }
-
+    // Parses a LOLCODE list and generates an HTML unordered list.
     fn parse_list(&mut self) {
         self.match_token("LIST");
     
@@ -480,7 +500,8 @@ impl SyntaxAnalyzer for LolCompiler {
     
         self.html_output.push_str("</ul>");
     }
-
+    // Parses one list item and gives the item its own local variable scope.
+    // Additional list items are parsed recursively.
     fn parse_list_items(&mut self) {
         self.match_token("#GIMMEH");
         self.match_token("ITEM");
@@ -505,7 +526,7 @@ impl SyntaxAnalyzer for LolCompiler {
             self.parse_list_items();
         }
     }
-
+    // Parses the valid content inside a list item until its closing #OIC.
     fn parse_inner_list(&mut self) {
         if self.current_token.is_empty()
             || self.current_token.eq_ignore_ascii_case("#OIC")
@@ -549,7 +570,8 @@ impl SyntaxAnalyzer for LolCompiler {
     
         self.parse_inner_list();
     }
-
+    // Parses a link address and generates an HTML anchor element
+    // using the address as both the URL and displayed text.
     fn parse_link(&mut self) {
         self.match_token("LINX");
     
@@ -576,12 +598,12 @@ impl SyntaxAnalyzer for LolCompiler {
         self.html_output.push_str("</a>");
         self.add_space_before_next_text();
     }
-
+    // Converts the LOLCODE #NEWLINE annotation into an HTML line break.
     fn parse_newline(&mut self) {
         self.match_token("#NEWLINE");
         self.html_output.push_str("<br>");
     }
-
+    // Consumes a normal text token and advances the parser to the next token.
     fn parse_text(&mut self) {
         if self.current_token.is_empty()
             || self.current_token.starts_with('#')
